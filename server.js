@@ -4,7 +4,6 @@ const https = require('https');
 const querystring = require('querystring');
 const fs = require('fs');
 
-// --- Secrets come from environment variables now. Set these on your host,
 // never in the source file. ---
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
@@ -27,6 +26,7 @@ if (!CLIENT_ID || !CLIENT_SECRET) {
 
 let tokens = {};
 let tokenExpiresAt = 0; // epoch ms
+let spotifyConnected = false;
 let lastTrackId = null;
 let currentBPM = 120;
 
@@ -269,22 +269,44 @@ const server = http.createServer((req, res) => {
     res.end();
 
   } else if (parsedUrl.pathname === '/callback') {
-    const code = parsedUrl.query.code;
-    if (code) {
-      exchangeCodeForTokens(code, (err) => {
-        setCORS(res);
-        if (err) {
-          res.writeHead(500, { 'Content-Type': 'text/plain' });
-          res.end(' Token exchange failed: ' + err.message);
-        } else {
-          res.writeHead(200, { 'Content-Type': 'text/plain' });
-          res.end(' Authorization successful! You can close this tab.');
-        }
-      });
-    } else {
-      res.writeHead(400, { 'Content-Type': 'text/plain' });
-      res.end(' No authorization code');
-    }
+  const code = parsedUrl.query.code;
+  if (code) {
+    exchangeCodeForTokens(code, (err) => {
+      setCORS(res);
+
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Token exchange failed: ' + err.message);
+      } else {
+        spotifyConnected = true;
+
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Rhythm Realms</title>
+          </head>
+          <body>
+            <h1>Spotify Connected ✓</h1>
+            <p>You can return to Rhythm Realms.</p>
+          </body>
+          </html>
+        `);
+      }
+    });
+
+  } else {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('No authorization code');
+  }
+  } else if (parsedUrl.pathname === '/status') {
+  setCORS(res);
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+
+  res.end(JSON.stringify({
+    connected: spotifyConnected
+  }));
 
   } else if (parsedUrl.pathname === '/current') {
     getCurrentlyPlaying((data) => {
